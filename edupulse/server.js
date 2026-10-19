@@ -10,13 +10,31 @@ const { connectMongo, User, Student, Attendance, Mark, Notification, Setting, mo
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
-const raw = new DatabaseSync(process.env.DB_FILE || path.join(__dirname, 'edupulse.db'));
-raw.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+
+const os = require('os');
+let raw;
+const defaultDbPath = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'edupulse.db')
+  : path.join(__dirname, 'edupulse.db');
+
+try {
+  raw = new DatabaseSync(process.env.DB_FILE || defaultDbPath);
+} catch {
+  raw = new DatabaseSync(path.join(os.tmpdir(), 'edupulse.db'));
+}
+
+try {
+  raw.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+} catch {
+  raw.exec('PRAGMA foreign_keys = ON;');
+}
+
 const db = {
   exec: sql => raw.exec(sql),
   prepare: sql => raw.prepare(sql),
   transaction: fn => (...a) => { raw.exec('BEGIN'); try { const r = fn(...a); raw.exec('COMMIT'); return r; } catch (e) { raw.exec('ROLLBACK'); throw e; } },
 };
+
 
 let isMongoConnected = false;
 async function initMongo() {
