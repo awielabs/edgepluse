@@ -41,16 +41,25 @@ export default function SettingsView({ addToast, refreshMeta }) {
     }
   };
 
-  const handleTestMongo = async () => {
-    if (!mongoUri.trim()) {
-      addToast('Please enter your MongoDB Atlas connection string.', 'error');
+  const handleTestMongo = async (uriOverride) => {
+    let target = (typeof uriOverride === 'string' ? uriOverride : mongoUri).trim();
+    
+    // Auto-extract mongodb+srv:// if surrounding text was copied
+    const match = target.match(/(mongodb(?:\+srv)?:\/\/[^\s"'<>]+)/i);
+    if (match) {
+      target = match[1];
+    }
+
+    if (!target && !dbMeta?.has_mongo_uri) {
+      addToast('Please enter your MongoDB Atlas connection string starting with mongodb+srv://', 'error');
       return;
     }
+
     setTestingMongo(true);
     try {
       const res = await fetchApi('/settings/mongodb', {
         method: 'POST',
-        body: { uri: mongoUri.trim() }
+        body: { uri: target || 'env' }
       });
       addToast(res.message, 'success');
       loadSettings();
@@ -61,6 +70,7 @@ export default function SettingsView({ addToast, refreshMeta }) {
       setTestingMongo(false);
     }
   };
+
 
   useEffect(() => {
     loadSettings();
@@ -256,37 +266,64 @@ export default function SettingsView({ addToast, refreshMeta }) {
                 type="text"
                 className="glass-input"
                 style={{ flex: 1, minWidth: '280px', fontFamily: 'monospace', fontSize: '13px' }}
-                placeholder="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/edupulse?retryWrites=true&w=majority"
+                placeholder="mongodb+srv://edupulse_admin:xqAx9I1fxifYRjS3@cluster0.ey3rp.mongodb.net/edupulse?retryWrites=true&w=majority"
                 value={mongoUri}
                 onChange={(e) => setMongoUri(e.target.value)}
               />
               <button
                 type="button"
-                onClick={handleTestMongo}
-                className="btn-secondary"
+                onClick={() => handleTestMongo()}
+                className="btn-primary"
                 disabled={testingMongo}
               >
-                <Cloud size={16} color="#34d399" />
+                <Cloud size={16} />
                 {testingMongo ? 'Verifying Cluster...' : 'Verify & Connect Atlas'}
               </button>
             </div>
+            {dbMeta?.has_mongo_uri && !mongoUri && (
+              <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#34d399' }}>✓ Connection string configured in .env:</span>
+                <code style={{ fontSize: '11px', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>{dbMeta.mongo_uri_masked}</code>
+                <button
+                  type="button"
+                  onClick={() => handleTestMongo('env')}
+                  style={{
+                    background: 'none',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#818cf8',
+                    cursor: 'pointer',
+                    fontSize: '11.5px',
+                    padding: '2px 8px',
+                    borderRadius: '4px'
+                  }}
+                >
+                  Test This Saved Connection
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={{
             fontSize: '12px',
             color: 'var(--text-dim)',
             background: 'rgba(0,0,0,0.25)',
-            padding: '10px 14px',
+            padding: '12px 14px',
             borderRadius: '8px',
             display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            flexDirection: 'column',
+            gap: '6px'
           }}>
-            <Cloud size={14} color="#38bdf8" />
-            <span>Format: <code>mongodb+srv://&lt;db_user&gt;:&lt;password&gt;@&lt;cluster-name&gt;.mongodb.net/edupulse</code> (obtained from Atlas Console &gt; Database &gt; Connect &gt; Drivers)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Cloud size={14} color="#38bdf8" />
+              <span><b>Format Requirement:</b> Must start with <code>mongodb+srv://</code></span>
+            </div>
+            <div style={{ color: '#fbbf24', fontSize: '11.5px' }}>
+              ⚠️ <b>Important:</b> If you see <i>"Could not connect / IP isn't whitelisted"</i>, log in to MongoDB Atlas &gt; <b>Network Access</b> &gt; Click <b>Add IP Address</b> &gt; Select <b>Allow Access from Anywhere (0.0.0.0/0)</b>.
+            </div>
           </div>
         </div>
       </div>
+
 
       {/* Email (SMTP) Gateway */}
       <div className="glass-panel" style={{ padding: '24px' }}>

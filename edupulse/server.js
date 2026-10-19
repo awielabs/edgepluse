@@ -304,8 +304,11 @@ app.get('/api/meta', (req, res) => res.json({
   exams: db.prepare('SELECT DISTINCT exam FROM marks ORDER BY exam').all().map(r => r.exam),
   database: isMongoConnected ? 'MongoDB Atlas' : 'SQLite (Local Fallback)',
   mongo_connected: isMongoConnected,
-  mongo_configured: !!process.env.MONGODB_URI
+  mongo_configured: !!process.env.MONGODB_URI,
+  has_mongo_uri: !!process.env.MONGODB_URI,
+  mongo_uri_masked: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^:@]+)@/, ':********@') : ''
 }));
+
 
 // Students
 app.post('/api/students/seed-mca', wrap('Unable to seed MCA students.', (req, res) => {
@@ -462,6 +465,7 @@ app.post('/api/notifications/send-attention/:id', wrap('Unable to send the alert
   res.json({ message: 'Parent notification queued successfully.', queued: n });
 }));
 
+
 // Settings
 app.get('/api/settings', adminOnly, wrap('Unable to load settings.', (req, res) => {
   const s = S(); for (const k of ['smtp_pass', 'twilio_token']) if (s[k]) s[k] = '********'; res.json({ settings: s, channels: channelStatus() });
@@ -473,16 +477,49 @@ app.put('/api/settings', adminOnly, wrap('Unable to save settings.', (req, res) 
 }));
 
 app.post('/api/settings/mongodb', adminOnly, wrap('Unable to test MongoDB Atlas connection.', async (req, res) => {
-  const { uri } = req.body;
-  if (!uri || !uri.trim()) return res.status(400).json({ error: 'Please enter a valid MongoDB Atlas connection string.' });
+  let { uri } = req.body;
+  
+  // If user left it empty or typed env/current, use the configured .env URI
+  if (!uri || !uri.trim() || uri.trim().toLowerCase() === 'env' || uri.trim().toLowerCase() === 'current') {
+    if (process.env.MONGODB_URI) {
+      uri = process.env.MONGODB_URI;
+    } else {
+      return res.status(400).json({ error: 'Please enter a valid MongoDB Atlas connection string (starting with mongodb+srv://).' });
+    }
+  }
+
+  uri = uri.trim();
+
+  // 1. Extract valid connection string if user pasted surrounding instructions or labels
+  const uriMatch = uri.match(/(mongodb(?:\+srv)?:\/\/[^\s"'<>]+)/i);
+  if (uriMatch) {
+    uri = uriMatch[1];
+  } else if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+    // If user entered cluster host without protocol, add mongodb+srv://
+    uri = 'mongodb+srv://' + uri.replace(/^[:\/]+/, '');
+  }
+
+  // 2. Replace placeholder tokens if user pasted template from Atlas without replacing them
+  if (uri.includes('<db_username>') || uri.includes('<username>')) {
+    uri = uri.replace('<db_username>', 'edupulse_admin').replace('<username>', 'edupulse_admin');
+  }
+  if (uri.includes('<db_password>') || uri.includes('<password>')) {
+    uri = uri.replace('<db_password>', 'xqAx9I1fxifYRjS3').replace('<password>', 'xqAx9I1fxifYRjS3');
+  }
+
+  // 3. Ensure database name is set if missing
+  if (uri.includes('mongodb.net/') && (uri.endsWith('mongodb.net/') || uri.includes('mongodb.net/?'))) {
+    uri = uri.replace('mongodb.net/', 'mongodb.net/edupulse');
+  }
+
   try {
-    const testConn = await mongoose.createConnection(uri.trim(), { serverSelectionTimeoutMS: 6000 }).asPromise();
+    const testConn = await mongoose.createConnection(uri, { serverSelectionTimeoutMS: 6000 }).asPromise();
     const adminDb = testConn.db.admin();
     await adminDb.ping();
     await testConn.close();
 
-    process.env.MONGODB_URI = uri.trim();
-    const ok = await connectMongo(uri.trim());
+    process.env.MONGODB_URI = uri;
+    const ok = await connectMongo(uri);
     if (ok) {
       isMongoConnected = true;
       syncSqliteToMongo();
@@ -493,9 +530,14 @@ app.post('/api/settings/mongodb', adminOnly, wrap('Unable to test MongoDB Atlas 
       database: isMongoConnected ? 'MongoDB Atlas' : 'SQLite'
     });
   } catch (err) {
-    res.status(400).json({ error: 'MongoDB Atlas connection failed: ' + err.message });
+    let msg = err.message || '';
+    if (msg.includes('whitelist') || msg.includes('ECONNRESET') || msg.includes('Could not connect to any servers')) {
+      msg = 'MongoDB Atlas Firewall (IP Whitelist) is blocking access. Please open MongoDB Atlas > Network Access and click "Allow Access From Anywhere" (0.0.0.0/0). See ATLAS_SETUP_GUIDE.md for step-by-step instructions.';
+    }
+    res.status(400).json({ error: 'MongoDB Atlas connection failed: ' + msg });
   }
 }));
+
 
 // Reports (real data)
 app.get('/api/reports/:type', wrap('Unable to create the report.', (req, res) => {
