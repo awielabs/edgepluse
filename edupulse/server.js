@@ -304,7 +304,20 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.text({ type: 'text/csv', limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Ensure MongoDB Atlas connection on serverless cold start
+app.use(async (req, res, next) => {
+  if (!isMongoConnected && process.env.MONGODB_URI) {
+    try {
+      isMongoConnected = await connectMongo(process.env.MONGODB_URI);
+    } catch {
+      // non-blocking
+    }
+  }
+  next();
+});
+
 app.post('/api/login', wrap('Unable to log in. Please try again.', (req, res) => {
+
   const u = db.prepare('SELECT * FROM users WHERE username=?').get((req.body.username || '').trim());
   if (!u || !bcrypt.compareSync(req.body.password || '', u.password)) return res.status(401).json({ error: 'Incorrect username or password.' });
   res.json({ token: jwt.sign({ id: u.id, role: u.role, name: u.name }, JWT_SECRET, { expiresIn: '12h' }), user: { name: u.name, role: u.role } });
