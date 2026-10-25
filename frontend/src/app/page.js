@@ -43,17 +43,22 @@ export default function Home() {
 
   // Check auth on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedToken = localStorage.getItem('ep_token');
-      const savedUser = localStorage.getItem('ep_user');
-      if (savedToken && savedUser) {
-        setToken(savedToken);
-        try {
-          setUser(JSON.parse(savedUser));
-        } catch {
-          setUser(null);
+    try {
+      if (typeof window !== 'undefined') {
+        const savedToken = localStorage.getItem('ep_token');
+        const savedUser = localStorage.getItem('ep_user');
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          try {
+            setUser(JSON.parse(savedUser));
+          } catch {
+            setUser(null);
+          }
         }
       }
+    } catch (e) {
+      console.warn('LocalStorage access warning:', e);
+    } finally {
       setInitialLoading(false);
     }
   }, []);

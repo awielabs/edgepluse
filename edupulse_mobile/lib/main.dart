@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const EduPulseApp());
 }
 
@@ -31,7 +32,6 @@ class EduPulseApp extends StatelessWidget {
             side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
           ),
         ),
-
         useMaterial3: true,
       ),
       home: const SplashScreen(),
@@ -44,22 +44,35 @@ const String kApiBaseUrl = 'https://edgepluse-qhy3.vercel.app/api';
 // ==================== API SERVICE ====================
 class ApiService {
   static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('ep_token');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('ep_token');
+    } catch (e) {
+      debugPrint('[ApiService] getToken error: $e');
+      return null;
+    }
   }
 
   static Future<void> saveAuth(String token, String userName, String role) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ep_token', token);
-    await prefs.setString('ep_user', userName);
-    await prefs.setString('ep_role', role);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ep_token', token);
+      await prefs.setString('ep_user', userName);
+      await prefs.setString('ep_role', role);
+    } catch (e) {
+      debugPrint('[ApiService] saveAuth error: $e');
+    }
   }
 
   static Future<void> clearAuth() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('ep_token');
-    await prefs.remove('ep_user');
-    await prefs.remove('ep_role');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('ep_token');
+      await prefs.remove('ep_user');
+      await prefs.remove('ep_role');
+    } catch (e) {
+      debugPrint('[ApiService] clearAuth error: $e');
+    }
   }
 
   static Future<Map<String, dynamic>> login(String username, String password) async {
@@ -67,10 +80,13 @@ class ApiService {
       Uri.parse('$kApiBaseUrl/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'username': username, 'password': password}),
-    );
+    ).timeout(const Duration(seconds: 15), onTimeout: () {
+      throw Exception('Login timed out. Please check your network connection.');
+    });
+
     final data = jsonDecode(res.body);
     if (res.statusCode == 200 && data['token'] != null) {
-      await saveAuth(data['token'], data['user']['name'] ?? username, data['user']['role'] ?? 'faculty');
+      await saveAuth(data['token'], data['user']?['name'] ?? username, data['user']?['role'] ?? 'faculty');
       return data;
     }
     throw Exception(data['error'] ?? 'Authentication failed');
@@ -81,12 +97,19 @@ class ApiService {
     final res = await http.get(
       Uri.parse('$kApiBaseUrl$endpoint'),
       headers: {
-        'Authorization': 'Bearer $token',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-    );
+    ).timeout(const Duration(seconds: 15), onTimeout: () {
+      throw Exception('Connection timed out loading $endpoint');
+    });
+
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
+    }
+    if (res.statusCode == 401) {
+      await clearAuth();
+      throw Exception('Session expired. Please log in again.');
     }
     final err = jsonDecode(res.body);
     throw Exception(err['error'] ?? 'Failed to load $endpoint');
@@ -97,14 +120,21 @@ class ApiService {
     final res = await http.post(
       Uri.parse('$kApiBaseUrl$endpoint'),
       headers: {
-        'Authorization': 'Bearer $token',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
       body: jsonEncode(body),
-    );
+    ).timeout(const Duration(seconds: 15), onTimeout: () {
+      throw Exception('Request timed out');
+    });
+
     final data = jsonDecode(res.body);
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return data;
+    }
+    if (res.statusCode == 401) {
+      await clearAuth();
+      throw Exception('Session expired. Please log in again.');
     }
     throw Exception(data['error'] ?? 'Request failed');
   }
@@ -119,20 +149,52 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  bool _canSkip = false;
+  bool _hasNavigated = false;
+
   @override
   void initState() {
     super.initState();
     _checkSession();
+
+    // Safety fallback: allow manual bypass after 2 seconds
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (mounted && !_hasNavigated) setState(() => _canSkip = true);
+    });
+
+    // Hard failsafe: guarantee screen moves to LoginScreen within 3.5 seconds
+    Future.delayed(const Duration(milliseconds: 3500), () {
+      if (mounted && !_hasNavigated) {
+        _goToLogin();
+      }
+    });
+  }
+
+  void _goToLogin() {
+    if (_hasNavigated || !mounted) return;
+    _hasNavigated = true;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+  }
+
+  void _goToMain() {
+    if (_hasNavigated || !mounted) return;
+    _hasNavigated = true;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainAppScaffold()));
   }
 
   Future<void> _checkSession() async {
-    await Future.delayed(const Duration(milliseconds: 1000));
-    final token = await ApiService.getToken();
-    if (!mounted) return;
-    if (token != null) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainAppScaffold()));
-    } else {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    try {
+      await Future.delayed(const Duration(milliseconds: 1000));
+      final token = await ApiService.getToken();
+      if (!mounted || _hasNavigated) return;
+      if (token != null && token.trim().isNotEmpty) {
+        _goToMain();
+      } else {
+        _goToLogin();
+      }
+    } catch (e) {
+      debugPrint('[SplashScreen] error during startup check: $e');
+      _goToLogin();
     }
   }
 
@@ -160,6 +222,14 @@ class _SplashScreenState extends State<SplashScreen> {
             const Text('Next-Gen Student Analytics & Alerts', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
             const SizedBox(height: 28),
             const CircularProgressIndicator(color: Color(0xFF38BDF8), strokeWidth: 2.5),
+            if (_canSkip) ...[
+              const SizedBox(height: 24),
+              TextButton.icon(
+                onPressed: _goToLogin,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF818CF8)),
+                label: const Text('Tap to continue to Login', style: TextStyle(color: Color(0xFF818CF8), fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ],
           ],
         ),
       ),
@@ -454,14 +524,16 @@ class _DashboardViewState extends State<DashboardView> {
 
   Future<void> _load() async {
     try {
-      final st = await ApiService.get('/students');
-      final m = await ApiService.get('/meta');
-      final p = await ApiService.get('/reports/performance');
+      final results = await Future.wait([
+        ApiService.get('/students').catchError((_) => []),
+        ApiService.get('/meta').catchError((_) => <String, dynamic>{}),
+        ApiService.get('/reports/performance').catchError((_) => []),
+      ]);
       if (mounted) {
         setState(() {
-          _students = st;
-          _meta = m;
-          _perf = p;
+          _students = results[0] is List ? (results[0] as List) : [];
+          _meta = results[1] is Map<String, dynamic> ? (results[1] as Map<String, dynamic>) : null;
+          _perf = results[2] is List ? (results[2] as List) : [];
           _loading = false;
         });
       }
