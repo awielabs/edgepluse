@@ -39,7 +39,10 @@ class EduPulseApp extends StatelessWidget {
   }
 }
 
-const String kApiBaseUrl = 'https://edgepluse-qhy3.vercel.app/api';
+const List<String> kApiBaseUrls = [
+  'https://edgepluse.vercel.app/api',
+  'https://edgepluse-qhy3.vercel.app/api',
+];
 
 // ==================== API SERVICE ====================
 class ApiService {
@@ -75,14 +78,26 @@ class ApiService {
     }
   }
 
+  static Future<http.Response> _sendWithFallback(Future<http.Response> Function(String baseUrl) requestFn) async {
+    Object? lastErr;
+    for (final base in kApiBaseUrls) {
+      try {
+        final res = await requestFn(base);
+        return res;
+      } catch (e) {
+        lastErr = e;
+        debugPrint('[ApiService] Failover from $base: $e');
+      }
+    }
+    throw lastErr ?? Exception('Network connection failed. Please check internet access.');
+  }
+
   static Future<Map<String, dynamic>> login(String username, String password) async {
-    final res = await http.post(
-      Uri.parse('$kApiBaseUrl/login'),
+    final res = await _sendWithFallback((base) => http.post(
+      Uri.parse('$base/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'username': username, 'password': password}),
-    ).timeout(const Duration(seconds: 15), onTimeout: () {
-      throw Exception('Login timed out. Please check your network connection.');
-    });
+    ).timeout(const Duration(seconds: 15)));
 
     final data = jsonDecode(res.body);
     if (res.statusCode == 200 && data['token'] != null) {
@@ -94,15 +109,13 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint) async {
     final token = await getToken();
-    final res = await http.get(
-      Uri.parse('$kApiBaseUrl$endpoint'),
+    final res = await _sendWithFallback((base) => http.get(
+      Uri.parse('$base$endpoint'),
       headers: {
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-    ).timeout(const Duration(seconds: 15), onTimeout: () {
-      throw Exception('Connection timed out loading $endpoint');
-    });
+    ).timeout(const Duration(seconds: 15)));
 
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
@@ -117,16 +130,14 @@ class ApiService {
 
   static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
     final token = await getToken();
-    final res = await http.post(
-      Uri.parse('$kApiBaseUrl$endpoint'),
+    final res = await _sendWithFallback((base) => http.post(
+      Uri.parse('$base$endpoint'),
       headers: {
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
       body: jsonEncode(body),
-    ).timeout(const Duration(seconds: 15), onTimeout: () {
-      throw Exception('Request timed out');
-    });
+    ).timeout(const Duration(seconds: 15)));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -261,7 +272,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainAppScaffold()));
     } catch (e) {
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      final msg = e.toString().replaceAll('Exception: ', '');
+      if (msg.contains('Socket') || msg.contains('Failed host lookup') || msg.contains('errno = 7')) {
+        setState(() => _error = 'Network connection error: Unable to reach EduPulse servers. Please check your internet or Wi-Fi connection.');
+      } else {
+        setState(() => _error = msg);
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
