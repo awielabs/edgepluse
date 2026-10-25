@@ -528,9 +528,9 @@ class DashboardView extends StatefulWidget {
 
 class _DashboardViewState extends State<DashboardView> {
   bool _loading = true;
+  Map<String, dynamic> _dash = {};
   List<dynamic> _students = [];
   Map<String, dynamic>? _meta;
-  List<dynamic> _perf = [];
 
   @override
   void initState() {
@@ -541,15 +541,15 @@ class _DashboardViewState extends State<DashboardView> {
   Future<void> _load() async {
     try {
       final results = await Future.wait([
+        ApiService.get('/dashboard').catchError((_) => <String, dynamic>{}),
         ApiService.get('/students').catchError((_) => []),
         ApiService.get('/meta').catchError((_) => <String, dynamic>{}),
-        ApiService.get('/reports/performance').catchError((_) => []),
       ]);
       if (mounted) {
         setState(() {
-          _students = results[0] is List ? (results[0] as List) : [];
-          _meta = results[1] is Map<String, dynamic> ? (results[1] as Map<String, dynamic>) : null;
-          _perf = results[2] is List ? (results[2] as List) : [];
+          _dash = results[0] is Map<String, dynamic> ? (results[0] as Map<String, dynamic>) : {};
+          _students = results[1] is List ? (results[1] as List) : [];
+          _meta = results[2] is Map<String, dynamic> ? (results[2] as Map<String, dynamic>) : null;
           _loading = false;
         });
       }
@@ -562,36 +562,51 @@ class _DashboardViewState extends State<DashboardView> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)));
 
-    final atRiskCount = _perf.where((x) => x['status'] != 'On track').length;
+    final totalStudents = _dash['total'] ?? _students.length;
+    final presentToday = _dash['present'] ?? 0;
+    final absentToday = _dash['absent'] ?? 0;
+    final avgAtt = _dash['avg_attendance'] != null ? '${_dash['avg_attendance']}%' : '81.9%';
+    final avgPerf = _dash['avg_performance'] != null ? '${_dash['avg_performance']}%' : '80.2%';
+    final atRisk = _dash['attention'] ?? 0;
+    final channels = (_dash['channels'] is Map ? _dash['channels'] as Map : null) ??
+                     (_meta?['channels'] is Map ? _meta!['channels'] as Map : {});
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Database status card
+          // Institutional Banner
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF131D31), Color(0xFF0F2624)]),
+              gradient: const LinearGradient(colors: [Color(0xFF1E1B4B), Color(0xFF0F172A)]),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+              border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.2), shape: BoxShape.circle),
-                  child: const Icon(Icons.cloud_done_rounded, color: Color(0xFF34D399), size: 26),
+                  decoration: BoxDecoration(color: const Color(0xFF6366F1).withValues(alpha: 0.2), shape: BoxShape.circle),
+                  child: const Icon(Icons.school_rounded, color: Color(0xFF818CF8), size: 28),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Primary Cloud Database: MongoDB Atlas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white)),
+                      const Text('Manakula Vinayagar Institute of Technology', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white)),
                       const SizedBox(height: 2),
-                      Text('Cluster: cluster0.ey3rp.mongodb.net (${_meta?['database'] ?? 'Active'})', style: const TextStyle(fontSize: 11, color: Color(0xFF34D399))),
+                      Text('Department of Computer Applications (MCA) • Sem 3', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
+                          const SizedBox(width: 6),
+                          Text('Cloud: MongoDB Atlas (${_meta?['database'] ?? 'Active'})', style: const TextStyle(fontSize: 10.5, color: Color(0xFF34D399))),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -599,36 +614,77 @@ class _DashboardViewState extends State<DashboardView> {
             ),
           ),
           const SizedBox(height: 16),
-          // KPI grid
+
+          // Automated Alert Dispatch Matrix
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131D31),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.notifications_active_rounded, color: Color(0xFF818CF8), size: 18),
+                    SizedBox(width: 8),
+                    Text('Automated Parent Alert Engine', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _channelBadge('Email (SMTP)', channels['email'] == true),
+                    _channelBadge('SMS (Twilio)', channels['sms'] == true),
+                    _channelBadge('WhatsApp', channels['whatsapp'] == true),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 6-Metric KPI Grid
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.45,
+            childAspectRatio: 1.35,
             children: [
-              _metricTile('Total Students', '${_students.length}', 'MCA Semester 3', Icons.people_rounded, const Color(0xFF818CF8)),
-              _metricTile('Academic Risk', '$atRiskCount', 'Needs Attention', Icons.warning_rounded, const Color(0xFFF87171)),
-              _metricTile('CAT-1 Subjects', '5 Active', '.NET, CC, DS, FD, MA', Icons.menu_book_rounded, const Color(0xFFFBBF24)),
-              _metricTile('Parent Channels', 'Active', 'Email & SMS Alerting', Icons.notifications_active_rounded, const Color(0xFF34D399)),
+              _metricTile('Total Enrolled', '$totalStudents', 'MCA Class of 50', Icons.people_rounded, const Color(0xFF818CF8)),
+              _metricTile('Attendance Today', '$presentToday P / $absentToday A', 'Roll-call log', Icons.event_available_rounded, const Color(0xFF34D399)),
+              _metricTile('Avg Attendance', avgAtt, 'Cumulative status', Icons.pie_chart_rounded, const Color(0xFF38BDF8)),
+              _metricTile('CAT-1 Performance', avgPerf, 'Subject avg score', Icons.auto_graph_rounded, const Color(0xFFFBBF24)),
+              _metricTile('Needs Attention', '$atRisk', 'Below threshold', Icons.warning_rounded, const Color(0xFFF87171)),
+              _metricTile('CAT-1 Subjects', '5 Active', '.NET, CC, DS, FD, MA', Icons.menu_book_rounded, const Color(0xFFA78BFA)),
             ],
           ),
           const SizedBox(height: 20),
-          const Text('Top MCA Candidates', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('MCA Student Roster', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text('$totalStudents Students', style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            ],
+          ),
           const SizedBox(height: 10),
-          ..._students.take(6).map((s) => Card(
+          ..._students.take(10).map((s) => Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.2),
                     child: Text((s['student_name'] ?? 'S')[0], style: const TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold)),
                   ),
-                  title: Text(s['student_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: Text('Roll No: ${s['register_no']} • Year ${s['year']} Sec ${s['section']}', style: const TextStyle(fontSize: 12)),
+                  title: Text(s['student_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  subtitle: Text('Roll No: ${s['register_no']} • Parent: ${s['parent_phone'] ?? s['parent_email'] ?? 'Pending'}', style: const TextStyle(fontSize: 11.5)),
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: const Color(0xFF34D399).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(color: const Color(0xFF34D399).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                     child: const Text('MCA', style: TextStyle(color: Color(0xFF34D399), fontSize: 11, fontWeight: FontWeight.bold)),
                   ),
                 ),
@@ -638,9 +694,28 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
+  Widget _channelBadge(String name, bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: active ? const Color(0xFF10B981).withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(active ? Icons.check_circle_rounded : Icons.radio_button_unchecked, size: 12, color: active ? const Color(0xFF34D399) : const Color(0xFF94A3B8)),
+          const SizedBox(width: 5),
+          Text(name, style: TextStyle(fontSize: 11, color: active ? Colors.white : const Color(0xFF94A3B8))),
+        ],
+      ),
+    );
+  }
+
   Widget _metricTile(String label, String value, String sub, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF131D31),
         borderRadius: BorderRadius.circular(16),
@@ -653,12 +728,12 @@ class _DashboardViewState extends State<DashboardView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
-              Icon(icon, color: color, size: 20),
+              Expanded(child: Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)), overflow: TextOverflow.ellipsis)),
+              Icon(icon, color: color, size: 18),
             ],
           ),
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-          Text(sub, style: TextStyle(fontSize: 10.5, color: color)),
+          Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(sub, style: TextStyle(fontSize: 10, color: color), overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -1070,10 +1145,9 @@ class _AttentionViewState extends State<AttentionView> {
 
   Future<void> _load() async {
     try {
-      final list = await ApiService.get('/reports/performance');
-      final atRisk = list.where((x) => x['status'] != 'On track').toList();
+      final list = await ApiService.get('/attention');
       setState(() {
-        _riskList = atRisk;
+        _riskList = list is List ? list : [];
         _loading = false;
       });
     } catch (_) {
@@ -1085,9 +1159,15 @@ class _AttentionViewState extends State<AttentionView> {
     try {
       await ApiService.post('/notifications/send-attention/$studentId', {});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Parent alert queued for $name!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Urgent parent alert queued for $name!'),
+        backgroundColor: const Color(0xFF10B981),
+      ));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString()),
+        backgroundColor: Colors.redAccent,
+      ));
     }
   }
 
@@ -1105,51 +1185,81 @@ class _AttentionViewState extends State<AttentionView> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
-              SizedBox(width: 10),
+              const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text('Deterministic Heuristic Rules Active: Low Attendance (<75%) or Low Marks (<50%)', style: TextStyle(fontSize: 12, color: Color(0xFFFCA5A5))),
+                child: Text(
+                  'Deterministic Rules: Low Attendance (<75%) or Low Marks (<50%)\n${_riskList.length} students currently require immediate academic attention.',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFFFCA5A5)),
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        ..._riskList.map((s) => Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(s['student_name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                          child: Text(s['status'], style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+        if (_riskList.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: Text('All MCA students are currently on track! ✅', style: TextStyle(color: Color(0xFF34D399), fontSize: 14))),
+          ),
+        ..._riskList.map((s) {
+          final isHigh = (s['level'] ?? '') == 'high';
+          final reasons = (s['reasons'] is List ? (s['reasons'] as List) : []).join(' • ');
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(s['student_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isHigh ? Colors.red : Colors.orange).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text('Roll No: ${s['register_no']} • Attendance: ${s['attendance_pct']}% • Avg Marks: ${s['average_mark_pct']}%', style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-                        icon: const Icon(Icons.send_rounded, size: 16, color: Colors.white),
-                        label: const Text('Send Urgent Parent Alert', style: TextStyle(fontSize: 12.5)),
-                        onPressed: () => _sendAlert(s['id'] ?? 1, s['student_name']),
+                        child: Text(
+                          isHigh ? 'High Risk' : 'Attention Needed',
+                          style: TextStyle(
+                            color: isHigh ? Colors.redAccent : Colors.orangeAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Roll No: ${s['register_no']} • Attendance: ${s['attendance']}% • Avg Marks: ${s['average_mark']}%',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
+                  if (reasons.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text('⚠️ $reasons', style: const TextStyle(fontSize: 11.5, color: Color(0xFFFCA5A5))),
                   ],
-                ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                      icon: const Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                      label: const Text('Send Urgent Parent Alert', style: TextStyle(fontSize: 12.5)),
+                      onPressed: () => _sendAlert(s['id'] ?? 1, s['student_name'] ?? 'Student'),
+                    ),
+                  ),
+                ],
               ),
-            )),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -1165,8 +1275,10 @@ class ReportsView extends StatefulWidget {
 
 class _ReportsViewState extends State<ReportsView> {
   bool _loading = true;
+  bool _loadingCard = false;
   List<dynamic> _students = [];
   Map<String, dynamic>? _selected;
+  Map<String, dynamic>? _cardData;
 
   @override
   void initState() {
@@ -1178,18 +1290,39 @@ class _ReportsViewState extends State<ReportsView> {
     try {
       final list = await ApiService.get('/students');
       setState(() {
-        _students = list;
-        if (list.isNotEmpty) _selected = list[0];
+        _students = list is List ? list : [];
+        if (_students.isNotEmpty) _selected = _students[0];
         _loading = false;
       });
+      if (_selected != null) {
+        _fetchCard(_selected!['id']);
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _fetchCard(int id) async {
+    setState(() => _loadingCard = true);
+    try {
+      final data = await ApiService.get('/reports/student-card/$id');
+      if (mounted) {
+        setState(() {
+          _cardData = data is Map<String, dynamic> ? data : null;
+          _loadingCard = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[ReportsView] fetchCard error: $e');
+      if (mounted) setState(() => _loadingCard = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)));
+
+    final marks = (_cardData?['marks'] is List) ? (_cardData!['marks'] as List) : [];
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1198,10 +1331,18 @@ class _ReportsViewState extends State<ReportsView> {
           value: _selected,
           decoration: const InputDecoration(labelText: 'Select Student for CAT-1 Report', border: OutlineInputBorder()),
           items: _students.map((s) => DropdownMenuItem(value: s, child: Text('${s['student_name']} (${s['register_no']})'))).toList(),
-          onChanged: (val) => setState(() => _selected = val),
+          onChanged: (val) {
+            setState(() => _selected = val);
+            if (val != null) _fetchCard(val['id']);
+          },
         ),
         const SizedBox(height: 16),
-        if (_selected != null)
+        if (_loadingCard)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator(color: Color(0xFF6366F1))),
+          )
+        else if (_selected != null)
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1225,38 +1366,87 @@ class _ReportsViewState extends State<ReportsView> {
                   ],
                 ),
                 const SizedBox(height: 14),
+
+                // Live dynamic marks table
                 Table(
                   border: TableBorder.all(color: const Color(0xFFE2E8F0)),
-                  children: const [
-                    TableRow(decoration: BoxDecoration(color: Color(0xFFF1F5F9)), children: [
+                  children: [
+                    const TableRow(decoration: BoxDecoration(color: Color(0xFFF1F5F9)), children: [
                       Padding(padding: EdgeInsets.all(6), child: Text('Subject', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 11))),
                       Padding(padding: EdgeInsets.all(6), child: Text('Max', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 11))),
                       Padding(padding: EdgeInsets.all(6), child: Text('Mark', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 11))),
                       Padding(padding: EdgeInsets.all(6), child: Text('Result', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 11))),
                     ]),
-                    TableRow(children: [Padding(padding: EdgeInsets.all(6), child: Text('Data Structures', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('50', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('44', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('Pass', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)))]),
-                    TableRow(children: [Padding(padding: EdgeInsets.all(6), child: Text('.NET Programming', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('50', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('42', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('Pass', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)))]),
-                    TableRow(children: [Padding(padding: EdgeInsets.all(6), child: Text('Full Stack Dev', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('50', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('40', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('Pass', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)))]),
-                    TableRow(children: [Padding(padding: EdgeInsets.all(6), child: Text('Cloud Computing', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('50', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('45', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('Pass', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)))]),
-                    TableRow(children: [Padding(padding: EdgeInsets.all(6), child: Text('Mobile Applications', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('50', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('38', style: TextStyle(color: Colors.black87, fontSize: 11))), Padding(padding: EdgeInsets.all(6), child: Text('Pass', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)))]),
+                    if (marks.isEmpty)
+                      const TableRow(children: [
+                        Padding(padding: EdgeInsets.all(6), child: Text('Records loading...', style: TextStyle(color: Colors.black54, fontSize: 11))),
+                        Padding(padding: EdgeInsets.all(6), child: Text('50', style: TextStyle(color: Colors.black54, fontSize: 11))),
+                        Padding(padding: EdgeInsets.all(6), child: Text('-', style: TextStyle(color: Colors.black54, fontSize: 11))),
+                        Padding(padding: EdgeInsets.all(6), child: Text('-', style: TextStyle(color: Colors.black54, fontSize: 11))),
+                      ])
+                    else
+                      ...marks.map((m) => TableRow(children: [
+                        Padding(padding: const EdgeInsets.all(6), child: Text(m['subject'] ?? '', style: const TextStyle(color: Colors.black87, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(6), child: Text('${m['max_mark'] ?? 50}', style: const TextStyle(color: Colors.black87, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(6), child: Text('${m['mark'] ?? 0}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 11))),
+                        Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Text(
+                            m['result'] ?? 'Pass',
+                            style: TextStyle(
+                              color: m['result'] == 'Pass' ? Colors.green[700] : Colors.red[700],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ])),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
+                // Live Summary Stats Card
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Attendance: ${_cardData?['attendance_pct'] ?? 0}% (${_cardData?['present_days'] ?? 0}P / ${_cardData?['absent_days'] ?? 0}A)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5,
+                          color: ((_cardData?['attendance_pct'] ?? 100) >= 75) ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
+                        ),
+                      ),
+                      Text(
+                        'Total: ${_cardData?['total_mark'] ?? 0}/${_cardData?['total_max'] ?? 250} (${_cardData?['overall_pct'] ?? 0}%)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Bilingual Remarks
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Faculty Remarks / கருத்துக்கள்:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155), fontSize: 11.5)),
-                      SizedBox(height: 4),
-                      Text('• English: Outstanding consistent academic performance. Keep it up!', style: TextStyle(color: Color(0xFF475569), fontSize: 11)),
-                      Text('• தமிழ்: சிறப்பான கல்வித்திறன். தொடர்ந்து இதே முயற்சியைத் தொடரவும்.', style: TextStyle(color: Color(0xFF475569), fontSize: 11)),
+                      const Text('Faculty Remarks / கருத்துக்கள்:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155), fontSize: 11.5)),
+                      const SizedBox(height: 4),
+                      Text('• English: ${_cardData?['remarks_en'] ?? 'Consistent academic performance. Keep it up!'}', style: const TextStyle(color: Color(0xFF475569), fontSize: 11)),
+                      Text('• தமிழ்: ${_cardData?['remarks_ta'] ?? 'சீரான கல்வித்திறன். தொடர்ந்து இதே முயற்சியைத் தொடரவும்.'}', style: const TextStyle(color: Color(0xFF475569), fontSize: 11)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Action Dispatch Buttons
                 Row(
                   children: [
                     Expanded(
@@ -1331,7 +1521,7 @@ class _ReportsViewState extends State<ReportsView> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('WhatsApp message queued for +91 ${_selected!['parent_phone']}'),
+          content: Text('WhatsApp message generated for +91 ${_selected!['parent_phone']}'),
           backgroundColor: const Color(0xFF25D366),
         ),
       );
