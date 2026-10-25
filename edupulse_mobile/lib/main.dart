@@ -1168,11 +1168,90 @@ class _ReportsViewState extends State<ReportsView> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                        label: const Text('Send WhatsApp', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: _sendWhatsApp,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6366F1),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: _sendingEmail
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.email_rounded, size: 18),
+                        label: Text(_sendingEmail ? 'Sending...' : 'Send Email', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: _sendingEmail ? null : _sendEmail,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
       ],
     );
+  }
+
+  bool _sendingEmail = false;
+
+  Future<void> _sendEmail() async {
+    if (_selected == null) return;
+    setState(() => _sendingEmail = true);
+    try {
+      final res = await ApiService.post('/notifications/send-report/${_selected!['id']}', {'channel': 'email'});
+      if (!mounted) return;
+      final emailResult = res['email_result'] ?? {};
+      final msg = emailResult['sent'] == true
+          ? 'Email dispatched to ${emailResult['recipient']}'
+          : (emailResult['error'] ?? 'Failed to send');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: emailResult['sent'] == true ? Colors.green : Colors.redAccent,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent));
+      }
+    } finally {
+      if (mounted) setState(() => _sendingEmail = false);
+    }
+  }
+
+  Future<void> _sendWhatsApp() async {
+    if (_selected == null) return;
+    try {
+      final res = await ApiService.post('/notifications/send-report/${_selected!['id']}', {'channel': 'whatsapp'});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('WhatsApp message queued for +91 ${_selected!['parent_phone']}'),
+          backgroundColor: const Color(0xFF25D366),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent));
+      }
+    }
   }
 }
 

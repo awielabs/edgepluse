@@ -249,6 +249,216 @@ function marksMessage(st, subject, mark, max, pct) {
   return `Academic Alert – ${S().institution_name}\n\nYour child ${st.student_name} scored ${mark}/${max} in ${subject} (${pct}%).\n\nCurrent performance indicates that additional academic attention may be helpful.\nPlease contact the institution if you need more information.`;
 }
 
+// Complete Bilingual Marks & Attendance Progress Report Generator
+function buildStudentMarksAndAttendanceReport(st, s = S()) {
+  const att = db.prepare("SELECT COUNT(*) total, COALESCE(SUM(status='Present'), 0) present, COALESCE(SUM(status='Absent'), 0) absent FROM attendance WHERE student_id=?").get(st.id) || {};
+  const totalDays = att.total || 0;
+  const presentDays = att.present || 0;
+  const absentDays = att.absent || 0;
+  const attPct = totalDays ? round((presentDays / totalDays) * 100) : 100;
+
+  const marks = db.prepare("SELECT subject, exam, mark, max_mark, percentage, result, performance FROM marks WHERE student_id=? ORDER BY subject").all(st.id);
+  
+  let totalMark = 0, totalMax = 0;
+  marks.forEach(m => {
+    totalMark += Number(m.mark) || 0;
+    totalMax += Number(m.max_mark) || 0;
+  });
+  const overallPct = totalMax ? round((totalMark / totalMax) * 100) : 0;
+  const failedSubjects = marks.filter(m => m.result === 'Fail');
+  const allPassed = marks.length > 0 && failedSubjects.length === 0;
+
+  // Bilingual remarks (English + Tamil)
+  let remarksEn = 'Consistent academic performance. Keep up the good work!';
+  let remarksTa = 'சீரான கல்வித்திறன். தொடர்ந்து இதே முயற்சியைத் தொடரவும்.';
+  if (overallPct >= 85 && attPct >= 80) {
+    remarksEn = 'Outstanding academic excellence and consistent attendance discipline!';
+    remarksTa = 'மிகவும் சிறப்பான கல்வித்திறன் மற்றும் சிறந்த வருகைப்பதிவு. வாழ்த்துகள்!';
+  } else if (!allPassed || attPct < 75) {
+    remarksEn = 'Immediate academic and attendance focus required. Kindly meet faculty advisor.';
+    remarksTa = 'கல்வித்திறன் மற்றும் வருகைப்பதிவில் கூடுதல் கவனம் தேவை. பேராசிரியரை அணுகவும்.';
+  }
+
+  // Plain Text formatted for WhatsApp & SMS
+  const subjectsText = marks.length > 0
+    ? marks.map(m => `  • ${m.subject}: ${m.mark}/${m.max_mark} (${m.percentage}%) - ${m.result === 'Pass' ? 'PASS ✅' : 'FAIL ❌'}`).join('\n')
+    : '  • Marks record pending';
+
+  const plainText =
+`🎓 *MANAKULA VINAYAGAR INSTITUTE OF TECHNOLOGY*
+📍 *Department of Computer Applications (MCA)*
+━━━━━━━━━━━━━━━━━━━━
+📄 *CAT-1 PROGRESS & ATTENDANCE REPORT*
+
+👤 *Student Name:* ${st.student_name}
+🆔 *Register No:* ${st.register_no}
+🏫 *Department:* ${st.department} (Year ${st.year}, Sec ${st.section})
+
+📅 *ATTENDANCE STATUS:*
+  • Total Working Days: ${totalDays}
+  • Present: ${presentDays} days | Absent: ${absentDays} days
+  • Attendance Percentage: *${attPct}%* ${attPct < 75 ? '⚠️ (Below 75% Criteria)' : '✅ (Satisfactory)'}
+
+📝 *CAT-1 EXAMINATION MARKS (Max: 50):*
+${subjectsText}
+━━━━━━━━━━━━━━━━━━━━
+📊 *Total Score:* ${totalMark}/${totalMax} (${overallPct}%)
+🏆 *Result Status:* ${allPassed ? 'ALL SUBJECTS PASSED ✅' : 'NEEDS ATTENTION ⚠️'}
+
+💬 *FACULTY REMARKS / ஆசிரியர் கருத்து:*
+  • *English:* ${remarksEn}
+  • *தமிழ்:* ${remarksTa}
+
+📞 *Institution Query:* 0413-2643007 | info@mvit.edu.in
+━━━━━━━━━━━━━━━━━━━━
+_EduPulse Automated Institutional Parent Notification System_`;
+
+  // HTML Email Format
+  const marksHtmlRows = marks.map(m => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px 12px; font-weight: 600; color: #1e293b;">${m.subject}</td>
+      <td style="padding: 10px 12px; color: #64748b; text-align: center;">${m.max_mark}</td>
+      <td style="padding: 10px 12px; font-weight: bold; color: #0f172a; text-align: center;">${m.mark}</td>
+      <td style="padding: 10px 12px; color: #475569; text-align: center;">${m.percentage}%</td>
+      <td style="padding: 10px 12px; text-align: center;">
+        <span style="background: ${m.result === 'Pass' ? '#dcfce7' : '#fee2e2'}; color: ${m.result === 'Pass' ? '#15803d' : '#b91c1c'}; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">
+          ${m.result}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CAT-1 Progress Report – ${st.student_name}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
+    <tr>
+      <td style="background: linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">MANAKULA VINAYAGAR INSTITUTE OF TECHNOLOGY</h2>
+        <p style="margin: 4px 0 0; font-size: 13px; color: #c7d2fe;">(Approved by AICTE, Affiliated to Pondicherry University)</p>
+        <p style="margin: 2px 0 0; font-size: 12px; color: #a5b4fc;">Kalitheerthalkuppam, Puducherry - 605 107</p>
+        <div style="margin-top: 14px; display: inline-block; background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; color: #ffffff;">
+          Department of Computer Applications (MCA) • CAT-1 Progress Report
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 24px;">
+        <table width="100%" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;">
+          <tr>
+            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Student Name:</td>
+            <td style="font-size: 14px; font-weight: bold; color: #0f172a; padding: 4px 8px;">${st.student_name}</td>
+            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Register No:</td>
+            <td style="font-size: 14px; font-weight: bold; color: #0f172a; padding: 4px 8px;">${st.register_no}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Programme / Year:</td>
+            <td style="font-size: 14px; color: #0f172a; padding: 4px 8px;">${st.department} • Year ${st.year} (Sem 3)</td>
+            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Section:</td>
+            <td style="font-size: 14px; color: #0f172a; padding: 4px 8px;">Section ${st.section}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 0 24px 20px;">
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px;">
+          <table width="100%">
+            <tr>
+              <td>
+                <span style="font-size: 14px; font-weight: bold; color: #166534;">Cumulative Attendance Record</span>
+                <p style="margin: 4px 0 0; font-size: 12px; color: #15803d;">Total Working Days: <b>${totalDays}</b> | Present: <b>${presentDays}</b> | Absent: <b>${absentDays}</b></p>
+              </td>
+              <td style="text-align: right;">
+                <span style="font-size: 22px; font-weight: 800; color: ${attPct < 75 ? '#dc2626' : '#16a34a'};">${attPct}%</span>
+                <div style="font-size: 11px; font-weight: 600; color: ${attPct < 75 ? '#dc2626' : '#16a34a'};">${attPct < 75 ? 'BELOW 75% CRITERIA' : 'SATISFACTORY'}</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 0 24px 20px;">
+        <h3 style="margin: 0 0 10px; font-size: 15px; color: #1e293b;">Continuous Assessment Test (CAT-1) Marks</h3>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; font-size: 13px;">
+          <thead style="background: #f1f5f9; color: #475569; font-weight: bold;">
+            <tr>
+              <th style="padding: 10px 12px; text-align: left;">Curricular Subject</th>
+              <th style="padding: 10px 12px; text-align: center;">Max</th>
+              <th style="padding: 10px 12px; text-align: center;">Mark</th>
+              <th style="padding: 10px 12px; text-align: center;">Percentage</th>
+              <th style="padding: 10px 12px; text-align: center;">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${marksHtmlRows}
+            <tr style="background: #f8fafc; font-weight: bold;">
+              <td style="padding: 12px; color: #0f172a;">Total Marks Obtained</td>
+              <td style="padding: 12px; text-align: center; color: #64748b;">${totalMax}</td>
+              <td style="padding: 12px; text-align: center; color: #4338ca; font-size: 14px;">${totalMark}</td>
+              <td style="padding: 12px; text-align: center; color: #4338ca; font-size: 14px;">${overallPct}%</td>
+              <td style="padding: 12px; text-align: center;">
+                <span style="color: ${allPassed ? '#15803d' : '#b91c1c'}; font-size: 12px;">${allPassed ? 'PASSED ✅' : 'NEEDS ATTENTION ⚠️'}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 0 24px 24px;">
+        <div style="background: #f8fafc; border-left: 4px solid #4338ca; padding: 16px; border-radius: 8px;">
+          <h4 style="margin: 0 0 6px; font-size: 13px; color: #334155;">Faculty Remarks / ஆசிரியர் கருத்துக்கள்:</h4>
+          <p style="margin: 0 0 6px; font-size: 13px; color: #475569;">• <b>English:</b> ${remarksEn}</p>
+          <p style="margin: 0; font-size: 13px; color: #475569;">• <b>தமிழ்:</b> ${remarksTa}</p>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background: #f1f5f9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0 0 4px;"><b>Manakula Vinayagar Institute of Technology</b> • Puducherry - 605 107</p>
+        <p style="margin: 0 0 8px;">Phone: 0413-2643007, 2643008 | Email: contact@mvit.edu.in | Web: www.mvit.edu.in</p>
+        <p style="margin: 0; font-size: 11px; color: #94a3b8;">This is an official computer-generated notification sent via EduPulse Institutional Parent Communication System.</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  // WhatsApp click-to-chat URL
+  const phoneClean = (st.parent_phone || '').replace(/\D/g, '');
+  const phoneWithCountry = phoneClean.length === 10 ? '91' + phoneClean : phoneClean;
+  const whatsappUrl = phoneWithCountry
+    ? `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(plainText)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(plainText)}`;
+
+  return {
+    student: st,
+    total_days: totalDays,
+    present_days: presentDays,
+    absent_days: absentDays,
+    attendance_pct: attPct,
+    marks,
+    total_mark: totalMark,
+    total_max: totalMax,
+    overall_pct: overallPct,
+    all_passed: allPassed,
+    remarks_en: remarksEn,
+    remarks_ta: remarksTa,
+    plainText,
+    html,
+    whatsappUrl
+  };
+}
+
+
 // ---------- CSV ----------
 const CSV_COLS = ['student_name', 'register_no', 'department', 'year', 'section', 'parent_name', 'parent_email', 'parent_phone'];
 function parseCSV(text) {
@@ -495,6 +705,136 @@ app.post('/api/notifications/send-attention/:id', wrap('Unable to send the alert
   const n = queueAlert(st, 'Attention', 'Student Update', msg, `at:${st.id}:${Date.now()}`);
   res.json({ message: 'Parent notification queued successfully.', queued: n });
 }));
+
+app.get('/api/reports/student-card/:id', wrap('Unable to load student report card.', (req, res) => {
+  const st = db.prepare('SELECT * FROM students WHERE id=?').get(req.params.id);
+  if (!st) return res.status(404).json({ error: 'Student not found.' });
+  res.json(buildStudentMarksAndAttendanceReport(st));
+}));
+
+app.post('/api/notifications/send-report/:id', wrap('Unable to send the student report.', async (req, res) => {
+  const st = db.prepare('SELECT * FROM students WHERE id=?').get(req.params.id);
+  if (!st) return res.status(404).json({ error: 'Student not found.' });
+  
+  const report = buildStudentMarksAndAttendanceReport(st);
+  const s = S();
+  const cfg = channelStatus();
+  const { channel = 'both', test_email, test_phone } = req.body || {};
+
+  const targetEmail = test_email || st.parent_email;
+  const targetPhone = test_phone || st.parent_phone;
+
+  let emailResult = { sent: false, note: 'Email channel was not requested' };
+  let whatsappResult = { sent: false, note: 'WhatsApp channel was not requested' };
+
+  // 1. Email Delivery
+  if (channel === 'email' || channel === 'both') {
+    if (!targetEmail) {
+      emailResult = { sent: false, error: 'Recipient parent email address is missing' };
+    } else {
+      try {
+        let transporter;
+        let isTestTransport = false;
+
+        if (cfg.email) {
+          transporter = nodemailer.createTransport({
+            host: s.smtp_host,
+            port: +s.smtp_port,
+            secure: +s.smtp_port === 465,
+            auth: { user: s.smtp_user, pass: s.smtp_pass }
+          });
+        } else {
+          // Automatic test transport (Ethereal Email) with live view preview URL
+          isTestTransport = true;
+          const testAcc = await nodemailer.createTestAccount();
+          transporter = nodemailer.createTransport({
+            host: 'smtp.ethereal.email',
+            port: 587,
+            secure: false,
+            auth: { user: testAcc.user, pass: testAcc.pass }
+          });
+        }
+
+        const info = await transporter.sendMail({
+          from: s.smtp_from || '"EduPulse MVIT" <academic.alerts@mvit.edu.in>',
+          to: targetEmail,
+          subject: `CAT-1 Marks & Attendance Report – ${st.student_name} (${st.register_no})`,
+          text: report.plainText,
+          html: report.html
+        });
+
+        const previewUrl = isTestTransport ? nodemailer.getTestMessageUrl(info) : null;
+        emailResult = {
+          sent: true,
+          recipient: targetEmail,
+          mode: isTestTransport ? 'Test Simulator (Ethereal Inbox)' : 'Live Institutional SMTP',
+          messageId: info.messageId,
+          preview_url: previewUrl,
+          message: isTestTransport
+            ? `Report email dispatched in test mode! View live inbox preview: ${previewUrl}`
+            : `Official report email delivered directly to ${targetEmail}`
+        };
+
+        db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,ref_key) VALUES(?,?,?,?,?,?,?,?)")
+          .run(st.id, 'Report Card', 'email', 'sent', `CAT-1 Report: ${st.student_name}`, report.plainText, targetEmail, `rep:em:${st.id}:${Date.now()}`);
+
+      } catch (err) {
+        console.error('[email dispatch error]', err);
+        emailResult = { sent: false, recipient: targetEmail, error: err.message };
+        db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,error,ref_key) VALUES(?,?,?,?,?,?,?,?,?)")
+          .run(st.id, 'Report Card', 'email', 'failed', `CAT-1 Report: ${st.student_name}`, report.plainText, targetEmail, err.message, `rep:em:${st.id}:${Date.now()}`);
+      }
+    }
+  }
+
+  // 2. WhatsApp Delivery & Direct Deep Link
+  if (channel === 'whatsapp' || channel === 'both') {
+    const cleanPhone = (targetPhone || '').replace(/\D/g, '');
+    const phoneWithCountry = cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone;
+    const directUrl = phoneWithCountry
+      ? `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(report.plainText)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(report.plainText)}`;
+
+    whatsappResult = {
+      sent: true,
+      recipient: targetPhone || 'Not set',
+      whatsapp_url: directUrl,
+      whatsapp_web_url: phoneWithCountry ? `https://web.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(report.plainText)}` : null,
+      message_preview: report.plainText
+    };
+
+    if (cfg.whatsapp && targetPhone) {
+      try {
+        const to = targetPhone.startsWith('+') ? targetPhone : '+91' + cleanPhone;
+        await twilioSend(s, 'whatsapp:' + s.whatsapp_from.replace('whatsapp:', ''), 'whatsapp:' + to, report.plainText);
+        whatsappResult.twilio_sent = true;
+      } catch (e) {
+        whatsappResult.twilio_error = e.message;
+      }
+    }
+
+    db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,ref_key) VALUES(?,?,?,?,?,?,?,?)")
+      .run(st.id, 'Report Card', 'whatsapp', 'sent', `CAT-1 Report: ${st.student_name}`, report.plainText, targetPhone || '', `rep:wa:${st.id}:${Date.now()}`);
+  }
+
+  res.json({
+    message: 'Parent report notifications generated successfully.',
+    student_name: st.student_name,
+    register_no: st.register_no,
+    email_result: emailResult,
+    whatsapp_result: whatsappResult,
+    report_summary: {
+      attendance_pct: report.attendance_pct,
+      total_mark: report.total_mark,
+      total_max: report.total_max,
+      overall_pct: report.overall_pct,
+      all_passed: report.all_passed,
+      remarks_en: report.remarks_en,
+      remarks_ta: report.remarks_ta
+    }
+  });
+}));
+
 
 
 // Settings
