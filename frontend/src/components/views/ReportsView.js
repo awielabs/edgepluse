@@ -66,6 +66,8 @@ export default function ReportsView({ meta, addToast }) {
         setStudentCard(card);
         if (card.student && card.student.parent_email) {
           setTestEmailInput(card.student.parent_email);
+        } else {
+          setTestEmailInput('');
         }
       })
       .catch((err) => {

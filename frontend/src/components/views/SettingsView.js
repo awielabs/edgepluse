@@ -12,7 +12,9 @@ import {
   Sliders,
   Database,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  Send,
+  ExternalLink
 } from 'lucide-react';
 
 export default function SettingsView({ addToast, refreshMeta }) {
@@ -23,6 +25,9 @@ export default function SettingsView({ addToast, refreshMeta }) {
   const [testingMongo, setTestingMongo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testEmailTarget, setTestEmailTarget] = useState('');
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState(null);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -95,6 +100,28 @@ export default function SettingsView({ addToast, refreshMeta }) {
       addToast(err.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!testEmailTarget.trim() || !testEmailTarget.includes('@')) {
+      addToast('Please enter a valid email address to test (e.g. name@gmail.com).', 'error');
+      return;
+    }
+    setTestingEmail(true);
+    setTestEmailResult(null);
+    try {
+      const res = await fetchApi('/settings/test-email', {
+        method: 'POST',
+        body: JSON.stringify({ recipient: testEmailTarget.trim() })
+      });
+      setTestEmailResult(res);
+      addToast(res.message || 'Test email dispatched successfully!', 'success');
+    } catch (err) {
+      setTestEmailResult({ success: false, error: err.message });
+      addToast(err.message || 'Failed to dispatch test email.', 'error');
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -407,6 +434,63 @@ export default function SettingsView({ addToast, refreshMeta }) {
               onChange={(e) => handleChange('smtp_from', e.target.value)}
             />
           </div>
+        </div>
+
+        {/* Test Email Dispatch Console */}
+        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#e2e8f0', marginBottom: '6px' }}>
+            Test Email Gateway Delivery
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+            Enter any email address to test and verify delivery. If live SMTP credentials are not configured, EduPulse automatically dispatches via Ethereal test simulator with a live inbox preview URL.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input
+              type="email"
+              className="glass-input"
+              style={{ flex: '1 1 240px', fontSize: '13px' }}
+              placeholder="Enter any email to test (e.g. sameer12200409@gmail.com)"
+              value={testEmailTarget}
+              onChange={(e) => setTestEmailTarget(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={testingEmail}
+              onClick={handleTestEmail}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+            >
+              <Send size={15} /> {testingEmail ? 'Sending Test...' : 'Send Test Email'}
+            </button>
+          </div>
+
+          {testEmailResult && (
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                background: testEmailResult.success ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                border: `1px solid ${testEmailResult.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: testEmailResult.success ? '#4ade80' : '#f87171' }}>
+                {testEmailResult.success ? `✅ Delivered to: ${testEmailResult.recipient} (${testEmailResult.mode})` : `❌ Delivery Failed: ${testEmailResult.error}`}
+              </div>
+              {testEmailResult.preview_url && (
+                <div style={{ marginTop: '8px' }}>
+                  <a
+                    href={testEmailResult.preview_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#38bdf8', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'underline', fontWeight: 600 }}
+                  >
+                    <ExternalLink size={14} /> Open &amp; Verify Delivered Message in Ethereal Live Inbox ↗
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -909,6 +909,91 @@ app.post('/api/settings/mongodb', adminOnly, wrap('Unable to test MongoDB Atlas 
   }
 }));
 
+app.post('/api/settings/test-email', adminOnly, wrap('Unable to send test diagnostic email.', async (req, res) => {
+  const { recipient, email } = req.body || {};
+  const targetEmail = (recipient || email || '').trim();
+  if (!targetEmail || !targetEmail.includes('@')) {
+    return res.status(400).json({ error: 'Please enter a valid recipient email address (e.g. name@gmail.com).' });
+  }
+
+  const s = S();
+  const cfg = channelStatus();
+  let transporter;
+  let isTestTransport = false;
+
+  if (cfg.email) {
+    transporter = nodemailer.createTransport({
+      host: s.smtp_host,
+      port: +s.smtp_port,
+      secure: +s.smtp_port === 465,
+      auth: { user: s.smtp_user, pass: s.smtp_pass }
+    });
+  } else {
+    isTestTransport = true;
+    const testAcc = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: { user: testAcc.user, pass: testAcc.pass }
+    });
+  }
+
+  const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+  const info = await transporter.sendMail({
+    from: s.smtp_from || '"EduPulse Diagnostics" <academic.alerts@mvit.edu.in>',
+    to: targetEmail,
+    subject: `[EduPulse Diagnostic] Email Dispatch Verification – ${timestamp}`,
+    text: `EduPulse Parent Notification Gateway Test\n\nRecipient: ${targetEmail}\nTimestamp: ${timestamp} IST\nDelivery Mode: ${isTestTransport ? 'Test Simulator (Ethereal Inbox)' : 'Live Institutional SMTP'}\nStatus: Delivered successfully.\n\nThis confirms that the EduPulse alert and report card email delivery system is working.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <div style="border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 16px;">
+          <h2 style="color: #4f46e5; margin: 0;">🎓 EduPulse Diagnostic Test</h2>
+          <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Manakula Vinayagar Institute of Technology (MVIT)</p>
+        </div>
+        <p style="color: #334155; font-size: 14px; line-height: 1.5;">
+          This test verification confirms that the EduPulse email dispatch service is active and ready to deliver parent alerts and student progress report cards.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: bold; width: 140px;">Recipient Email:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-family: monospace;">${targetEmail}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Timestamp:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${timestamp} IST</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Delivery Mode:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${isTestTransport ? 'Ethereal Test Simulator (Inbox Preview)' : 'Live Institutional SMTP'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Message ID:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-family: monospace; font-size: 11px;">${info.messageId}</td>
+          </tr>
+        </table>
+        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 16px; color: #166534; font-size: 13px; font-weight: 600;">
+          ✅ Gateway Verification Successful: Messages are successfully processed and delivered.
+        </div>
+      </div>
+    `
+  });
+
+  const previewUrl = isTestTransport ? nodemailer.getTestMessageUrl(info) : null;
+  res.json({
+    success: true,
+    recipient: targetEmail,
+    mode: isTestTransport ? 'Test Simulator (Ethereal Inbox)' : 'Live Institutional SMTP',
+    messageId: info.messageId,
+    preview_url: previewUrl,
+    message: isTestTransport
+      ? `Diagnostic test email dispatched in test mode! View live message in Ethereal test inbox: ${previewUrl}`
+      : `Diagnostic test email delivered directly to ${targetEmail}.`
+  });
+}));
+
+
+
 
 // Reports (real data)
 app.get('/api/reports/:type', wrap('Unable to create the report.', (req, res) => {
