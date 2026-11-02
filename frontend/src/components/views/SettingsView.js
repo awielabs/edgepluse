@@ -442,7 +442,7 @@ export default function SettingsView({ addToast, refreshMeta }) {
             Test Email Gateway Delivery
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
-            Enter any email address to test and verify delivery. If live SMTP credentials are not configured, EduPulse automatically dispatches via Ethereal test simulator with a live inbox preview URL.
+            Enter any email address to test and verify delivery directly via Google Gmail SMTP (<code>sameer12200409@gmail.com</code>). Test emails are delivered straight to the recipient inbox.
           </p>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <input

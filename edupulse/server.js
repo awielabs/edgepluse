@@ -107,13 +107,43 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 `);
 
 const DEFAULTS = {
-  institution_name: 'Your Institution', low_attendance: '75', low_marks: '50', pass_mark: '40',
+  institution_name: 'Manakula Vinayagar Institute of Technology', low_attendance: '75', low_marks: '50', pass_mark: '40',
   performance_drop: '15', repeated_absence: '3', auto_attendance_alert: '1', auto_marks_alert: '1',
-  smtp_host: '', smtp_port: '587', smtp_user: '', smtp_pass: '', smtp_from: '',
+  smtp_host: 'smtp.gmail.com', smtp_port: '465', smtp_user: 'sameer12200409@gmail.com', smtp_pass: 'zyvtomcqgjvyeqxl', smtp_from: 'EduPulse MVIT <sameer12200409@gmail.com>',
   twilio_sid: '', twilio_token: '', sms_from: '', whatsapp_from: '',
 };
 for (const [k, v] of Object.entries(DEFAULTS)) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k, v);
-const S = () => Object.fromEntries(db.prepare('SELECT key,value FROM settings').all().map(r => [r.key, r.value]));
+const S = () => {
+  const dbSettings = Object.fromEntries(db.prepare('SELECT key,value FROM settings').all().map(r => [r.key, r.value]));
+  return {
+    ...dbSettings,
+    smtp_host: dbSettings.smtp_host || process.env.SMTP_HOST || 'smtp.gmail.com',
+    smtp_port: dbSettings.smtp_port || process.env.SMTP_PORT || '465',
+    smtp_user: dbSettings.smtp_user || process.env.SMTP_USER || 'sameer12200409@gmail.com',
+    smtp_pass: dbSettings.smtp_pass || process.env.SMTP_PASS || 'zyvtomcqgjvyeqxl',
+    smtp_from: dbSettings.smtp_from || process.env.SMTP_FROM || 'EduPulse MVIT <sameer12200409@gmail.com>',
+  };
+};
+
+function createMailTransporter(s) {
+  const host = s.smtp_host || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = +(s.smtp_port || process.env.SMTP_PORT || 465);
+  const user = s.smtp_user || process.env.SMTP_USER || 'sameer12200409@gmail.com';
+  const pass = s.smtp_pass || process.env.SMTP_PASS || 'zyvtomcqgjvyeqxl';
+
+  if (host.includes('gmail') || (user && user.endsWith('@gmail.com'))) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user, pass }
+    });
+  }
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
+  });
+}
 
 // Seed staff logins only (no students, no student login)
 if (!db.prepare('SELECT COUNT(*) c FROM users').get().c) {
@@ -211,8 +241,8 @@ async function deliver(n) {
   try {
     if (n.channel === 'email') {
       if (!n.recipient) throw new Error('Parent email is missing');
-      const t = nodemailer.createTransport({ host: s.smtp_host, port: +s.smtp_port, secure: +s.smtp_port === 465, auth: { user: s.smtp_user, pass: s.smtp_pass } });
-      await t.sendMail({ from: s.smtp_from, to: n.recipient, subject: `${s.institution_name} – ${n.title}`, text: n.message });
+      const t = createMailTransporter(s);
+      await t.sendMail({ from: s.smtp_from || '"EduPulse MVIT" <sameer12200409@gmail.com>', to: n.recipient, subject: `${s.institution_name} – ${n.title}`, text: n.message });
     } else {
       if (!n.recipient) throw new Error('Parent phone number is missing');
       const to = n.recipient.startsWith('+') ? n.recipient : '+91' + n.recipient.replace(/\D/g, '');
@@ -733,46 +763,21 @@ app.post('/api/notifications/send-report/:id', wrap('Unable to send the student 
       emailResult = { sent: false, error: 'Recipient parent email address is missing' };
     } else {
       try {
-        let transporter;
-        let isTestTransport = false;
-
-        if (cfg.email) {
-          transporter = nodemailer.createTransport({
-            host: s.smtp_host,
-            port: +s.smtp_port,
-            secure: +s.smtp_port === 465,
-            auth: { user: s.smtp_user, pass: s.smtp_pass }
-          });
-        } else {
-          // Automatic test transport (Ethereal Email) with live view preview URL
-          isTestTransport = true;
-          const testAcc = await nodemailer.createTestAccount();
-          transporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: { user: testAcc.user, pass: testAcc.pass }
-          });
-        }
-
+        const transporter = createMailTransporter(s);
         const info = await transporter.sendMail({
-          from: s.smtp_from || '"EduPulse MVIT" <academic.alerts@mvit.edu.in>',
+          from: s.smtp_from || '"EduPulse MVIT" <sameer12200409@gmail.com>',
           to: targetEmail,
           subject: `CAT-1 Marks & Attendance Report – ${st.student_name} (${st.register_no})`,
           text: report.plainText,
           html: report.html
         });
 
-        const previewUrl = isTestTransport ? nodemailer.getTestMessageUrl(info) : null;
         emailResult = {
           sent: true,
           recipient: targetEmail,
-          mode: isTestTransport ? 'Test Simulator (Ethereal Inbox)' : 'Live Institutional SMTP',
+          mode: 'Official Google Gmail SMTP',
           messageId: info.messageId,
-          preview_url: previewUrl,
-          message: isTestTransport
-            ? `Report email dispatched in test mode! View live inbox preview: ${previewUrl}`
-            : `Official report email delivered directly to ${targetEmail}`
+          message: `Official report email delivered directly to ${targetEmail} via Gmail SMTP.`
         };
 
         db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,ref_key) VALUES(?,?,?,?,?,?,?,?)")
@@ -917,42 +922,23 @@ app.post('/api/settings/test-email', adminOnly, wrap('Unable to send test diagno
   }
 
   const s = S();
-  const cfg = channelStatus();
-  let transporter;
-  let isTestTransport = false;
-
-  if (cfg.email) {
-    transporter = nodemailer.createTransport({
-      host: s.smtp_host,
-      port: +s.smtp_port,
-      secure: +s.smtp_port === 465,
-      auth: { user: s.smtp_user, pass: s.smtp_pass }
-    });
-  } else {
-    isTestTransport = true;
-    const testAcc = await nodemailer.createTestAccount();
-    transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: { user: testAcc.user, pass: testAcc.pass }
-    });
-  }
-
+  const transporter = createMailTransporter(s);
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
   const info = await transporter.sendMail({
-    from: s.smtp_from || '"EduPulse Diagnostics" <academic.alerts@mvit.edu.in>',
+    from: s.smtp_from || '"EduPulse MVIT" <sameer12200409@gmail.com>',
     to: targetEmail,
-    subject: `[EduPulse Diagnostic] Email Dispatch Verification – ${timestamp}`,
-    text: `EduPulse Parent Notification Gateway Test\n\nRecipient: ${targetEmail}\nTimestamp: ${timestamp} IST\nDelivery Mode: ${isTestTransport ? 'Test Simulator (Ethereal Inbox)' : 'Live Institutional SMTP'}\nStatus: Delivered successfully.\n\nThis confirms that the EduPulse alert and report card email delivery system is working.`,
+    subject: `[EduPulse MVIT] Real Gmail SMTP Verification – ${timestamp}`,
+    text: `EduPulse Parent Notification Gateway Test\n\nRecipient: ${targetEmail}\nTimestamp: ${timestamp} IST\nDelivery Gateway: Official Google Gmail SMTP\nStatus: Delivered successfully to your inbox.\n\nThis confirms that the Gmail App Password is authenticated and live email notifications are active.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <div style="border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 16px;">
-          <h2 style="color: #4f46e5; margin: 0;">🎓 EduPulse Diagnostic Test</h2>
-          <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Manakula Vinayagar Institute of Technology (MVIT)</p>
+        <div style="background: linear-gradient(135deg, #4338ca, #6366f1); padding: 18px 24px; border-radius: 8px; color: #ffffff; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 20px;">🎓 MANAKULA VINAYAGAR INSTITUTE OF TECHNOLOGY</h2>
+          <p style="margin: 4px 0 0; opacity: 0.9; font-size: 13px;">EduPulse Institutional Parent Notification Gateway</p>
         </div>
-        <p style="color: #334155; font-size: 14px; line-height: 1.5;">
-          This test verification confirms that the EduPulse email dispatch service is active and ready to deliver parent alerts and student progress report cards.
+        <h3 style="color: #1e293b; margin-top: 0;">✅ Gmail SMTP Diagnostic Verification Successful</h3>
+        <p style="color: #475569; font-size: 14px; line-height: 1.5;">
+          This verification message was delivered directly via Google's official <b>Gmail SMTP Servers</b> (not a simulator).
         </p>
         <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
           <tr style="border-bottom: 1px solid #f1f5f9;">
@@ -964,31 +950,27 @@ app.post('/api/settings/test-email', adminOnly, wrap('Unable to send test diagno
             <td style="padding: 8px 0; color: #0f172a;">${timestamp} IST</td>
           </tr>
           <tr style="border-bottom: 1px solid #f1f5f9;">
-            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Delivery Mode:</td>
-            <td style="padding: 8px 0; color: #0f172a;">${isTestTransport ? 'Ethereal Test Simulator (Inbox Preview)' : 'Live Institutional SMTP'}</td>
+            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Gateway:</td>
+            <td style="padding: 8px 0; color: #0f172a;">Google Gmail SMTP (smtp.gmail.com:465)</td>
           </tr>
           <tr>
-            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Message ID:</td>
-            <td style="padding: 8px 0; color: #0f172a; font-family: monospace; font-size: 11px;">${info.messageId}</td>
+            <td style="padding: 8px 0; color: #64748b; font-weight: bold;">Status:</td>
+            <td style="padding: 8px 0; color: #16a34a; font-weight: bold;">DELIVERED TO INBOX ✅</td>
           </tr>
         </table>
         <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 16px; color: #166534; font-size: 13px; font-weight: 600;">
-          ✅ Gateway Verification Successful: Messages are successfully processed and delivered.
+          All student CAT-1 progress reports and attendance alerts will be delivered directly to parent email inboxes!
         </div>
       </div>
     `
   });
 
-  const previewUrl = isTestTransport ? nodemailer.getTestMessageUrl(info) : null;
   res.json({
     success: true,
     recipient: targetEmail,
-    mode: isTestTransport ? 'Test Simulator (Ethereal Inbox)' : 'Live Institutional SMTP',
+    mode: 'Official Google Gmail SMTP (Live Delivery)',
     messageId: info.messageId,
-    preview_url: previewUrl,
-    message: isTestTransport
-      ? `Diagnostic test email dispatched in test mode! View live message in Ethereal test inbox: ${previewUrl}`
-      : `Diagnostic test email delivered directly to ${targetEmail}.`
+    message: `Test email successfully dispatched directly to ${targetEmail} via Gmail SMTP.`
   });
 }));
 

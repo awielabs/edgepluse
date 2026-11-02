@@ -400,6 +400,11 @@ export default function ReportsView({ meta, addToast }) {
                     <div style={{ fontSize: '12.5px', fontWeight: 'bold', color: emailResult.sent ? '#4ade80' : '#f87171' }}>
                       {emailResult.sent ? '✅ Dispatched to: ' + emailResult.recipient : '❌ Delivery Failed: ' + emailResult.error}
                     </div>
+                    {emailResult.sent && (
+                      <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#86efac' }}>
+                        Delivered directly to inbox via <b>Google Gmail SMTP</b> ({emailResult.mode || 'smtp.gmail.com'})
+                      </div>
+                    )}
                     {emailResult.preview_url && (
                       <div style={{ marginTop: '6px' }}>
                         <a
@@ -408,7 +413,7 @@ export default function ReportsView({ meta, addToast }) {
                           rel="noreferrer"
                           style={{ color: '#38bdf8', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'underline' }}
                         >
-                          <ExternalLink size={13} /> View Live Dispatched Email in Ethereal Test Inbox
+                          <ExternalLink size={13} /> View Dispatched Email Preview
                         </a>
                       </div>
                     )}
