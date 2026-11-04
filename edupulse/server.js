@@ -346,13 +346,13 @@ _EduPulse Automated Institutional Parent Notification System_`;
   // HTML Email Format
   const marksHtmlRows = marks.map(m => `
     <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 10px 12px; font-weight: 600; color: #1e293b;">${m.subject}</td>
-      <td style="padding: 10px 12px; color: #64748b; text-align: center;">${m.max_mark}</td>
-      <td style="padding: 10px 12px; font-weight: bold; color: #0f172a; text-align: center;">${m.mark}</td>
-      <td style="padding: 10px 12px; color: #475569; text-align: center;">${m.percentage}%</td>
-      <td style="padding: 10px 12px; text-align: center;">
+      <td style="padding: 10px 14px; font-weight: 600; color: #1e293b;">${m.subject}</td>
+      <td style="padding: 10px 14px; color: #64748b; text-align: center;">${m.max_mark}</td>
+      <td style="padding: 10px 14px; font-weight: bold; color: #0f172a; text-align: center;">${m.mark}</td>
+      <td style="padding: 10px 14px; color: #475569; text-align: center;">${m.percentage}%</td>
+      <td style="padding: 10px 14px; text-align: center;">
         <span style="background: ${m.result === 'Pass' ? '#dcfce7' : '#fee2e2'}; color: ${m.result === 'Pass' ? '#15803d' : '#b91c1c'}; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">
-          ${m.result}
+          ${m.result === 'Pass' ? 'PASS ✅' : 'FAIL ❌'}
         </span>
       </td>
     </tr>
@@ -363,98 +363,131 @@ _EduPulse Automated Institutional Parent Notification System_`;
 <html>
 <head>
   <meta charset="utf-8">
-  <title>CAT-1 Progress Report – ${st.student_name}</title>
+  <title>CAT-1 Progress & Attendance Report – ${st.student_name}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+    <!-- Header -->
     <tr>
-      <td style="background: linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
-        <h2 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">MANAKULA VINAYAGAR INSTITUTE OF TECHNOLOGY</h2>
-        <p style="margin: 4px 0 0; font-size: 13px; color: #c7d2fe;">(Approved by AICTE, Affiliated to Pondicherry University)</p>
-        <p style="margin: 2px 0 0; font-size: 12px; color: #a5b4fc;">Kalitheerthalkuppam, Puducherry - 605 107</p>
-        <div style="margin-top: 14px; display: inline-block; background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; color: #ffffff;">
-          Department of Computer Applications (MCA) • CAT-1 Progress Report
+      <td style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%); padding: 26px 24px; text-align: center; color: #ffffff;">
+        <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.4;">
+          🎓 MANAKULA VINAYAGAR INSTITUTE OF TECHNOLOGY
+        </div>
+        <div style="font-size: 13px; color: #c7d2fe; margin-top: 4px; font-weight: 500;">
+          📍 Department of Computer Applications (MCA)
+        </div>
+        <div style="border-top: 1px dashed rgba(255,255,255,0.25); margin: 14px 0 12px;"></div>
+        <div style="display: inline-block; background: rgba(255,255,255,0.15); padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px;">
+          📄 CAT-1 PROGRESS &amp; ATTENDANCE REPORT
         </div>
       </td>
     </tr>
+
+    <!-- Student Details -->
     <tr>
-      <td style="padding: 24px;">
-        <table width="100%" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;">
+      <td style="padding: 20px 24px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 13.5px;">
           <tr>
-            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Student Name:</td>
-            <td style="font-size: 14px; font-weight: bold; color: #0f172a; padding: 4px 8px;">${st.student_name}</td>
-            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Register No:</td>
-            <td style="font-size: 14px; font-weight: bold; color: #0f172a; padding: 4px 8px;">${st.register_no}</td>
+            <td style="padding: 4px 0; color: #64748b; width: 140px;">👤 <b>Student Name:</b></td>
+            <td style="padding: 4px 0; color: #0f172a; font-weight: 700;">${st.student_name}</td>
           </tr>
           <tr>
-            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Programme / Year:</td>
-            <td style="font-size: 14px; color: #0f172a; padding: 4px 8px;">${st.department} • Year ${st.year} (Sem 3)</td>
-            <td style="font-size: 13px; color: #64748b; padding: 4px 8px;">Section:</td>
-            <td style="font-size: 14px; color: #0f172a; padding: 4px 8px;">Section ${st.section}</td>
+            <td style="padding: 4px 0; color: #64748b;">🆔 <b>Register No:</b></td>
+            <td style="padding: 4px 0; color: #0f172a; font-weight: 700;">${st.register_no}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #64748b;">🏫 <b>Department:</b></td>
+            <td style="padding: 4px 0; color: #0f172a;">${st.department} (Year ${st.year}, Sec ${st.section})</td>
           </tr>
         </table>
       </td>
     </tr>
+
+    <!-- Attendance Status -->
     <tr>
-      <td style="padding: 0 24px 20px;">
-        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px;">
-          <table width="100%">
-            <tr>
-              <td>
-                <span style="font-size: 14px; font-weight: bold; color: #166534;">Cumulative Attendance Record</span>
-                <p style="margin: 4px 0 0; font-size: 12px; color: #15803d;">Total Working Days: <b>${totalDays}</b> | Present: <b>${presentDays}</b> | Absent: <b>${absentDays}</b></p>
-              </td>
-              <td style="text-align: right;">
-                <span style="font-size: 22px; font-weight: 800; color: ${attPct < 75 ? '#dc2626' : '#16a34a'};">${attPct}%</span>
-                <div style="font-size: 11px; font-weight: 600; color: ${attPct < 75 ? '#dc2626' : '#16a34a'};">${attPct < 75 ? 'BELOW 75% CRITERIA' : 'SATISFACTORY'}</div>
-              </td>
-            </tr>
-          </table>
+      <td style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">
+          📅 <b>ATTENDANCE STATUS:</b>
+        </div>
+        <div style="background: ${attPct < 75 ? '#fef2f2' : '#f0fdf4'}; border: 1px solid ${attPct < 75 ? '#fecaca' : '#bbf7d0'}; border-radius: 10px; padding: 14px 16px;">
+          <div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
+            • Total Working Days: <b>${totalDays}</b>
+          </div>
+          <div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
+            • Present: <b style="color: #16a34a;">${presentDays} days</b> | Absent: <b style="color: #dc2626;">${absentDays} days</b>
+          </div>
+          <div style="font-size: 13.5px; color: #0f172a;">
+            • Attendance Percentage: <b style="color: ${attPct < 75 ? '#dc2626' : '#16a34a'}; font-size: 15px;">${attPct}%</b> ${attPct < 75 ? '<span style="color: #dc2626; font-weight: 700;">⚠️ (Below 75% Criteria)</span>' : '<span style="color: #16a34a; font-weight: 700;">✅ (Satisfactory)</span>'}
+          </div>
         </div>
       </td>
     </tr>
+
+    <!-- CAT-1 Marks -->
     <tr>
-      <td style="padding: 0 24px 20px;">
-        <h3 style="margin: 0 0 10px; font-size: 15px; color: #1e293b;">Continuous Assessment Test (CAT-1) Marks</h3>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; font-size: 13px;">
+      <td style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">
+          📝 <b>CAT-1 EXAMINATION MARKS (Max: 50):</b>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; font-size: 13px; margin-bottom: 12px;">
           <thead style="background: #f1f5f9; color: #475569; font-weight: bold;">
             <tr>
-              <th style="padding: 10px 12px; text-align: left;">Curricular Subject</th>
-              <th style="padding: 10px 12px; text-align: center;">Max</th>
-              <th style="padding: 10px 12px; text-align: center;">Mark</th>
-              <th style="padding: 10px 12px; text-align: center;">Percentage</th>
-              <th style="padding: 10px 12px; text-align: center;">Result</th>
+              <th style="padding: 10px 14px; text-align: left;">Subject</th>
+              <th style="padding: 10px 14px; text-align: center;">Max</th>
+              <th style="padding: 10px 14px; text-align: center;">Mark</th>
+              <th style="padding: 10px 14px; text-align: center;">Percentage</th>
+              <th style="padding: 10px 14px; text-align: center;">Result</th>
             </tr>
           </thead>
           <tbody>
             ${marksHtmlRows}
-            <tr style="background: #f8fafc; font-weight: bold;">
-              <td style="padding: 12px; color: #0f172a;">Total Marks Obtained</td>
-              <td style="padding: 12px; text-align: center; color: #64748b;">${totalMax}</td>
-              <td style="padding: 12px; text-align: center; color: #4338ca; font-size: 14px;">${totalMark}</td>
-              <td style="padding: 12px; text-align: center; color: #4338ca; font-size: 14px;">${overallPct}%</td>
-              <td style="padding: 12px; text-align: center;">
-                <span style="color: ${allPassed ? '#15803d' : '#b91c1c'}; font-size: 12px;">${allPassed ? 'PASSED ✅' : 'NEEDS ATTENTION ⚠️'}</span>
-              </td>
-            </tr>
           </tbody>
         </table>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 0 24px 24px;">
-        <div style="background: #f8fafc; border-left: 4px solid #4338ca; padding: 16px; border-radius: 8px;">
-          <h4 style="margin: 0 0 6px; font-size: 13px; color: #334155;">Faculty Remarks / ஆசிரியர் கருத்துக்கள்:</h4>
-          <p style="margin: 0 0 6px; font-size: 13px; color: #475569;">• <b>English:</b> ${remarksEn}</p>
-          <p style="margin: 0; font-size: 13px; color: #475569;">• <b>தமிழ்:</b> ${remarksTa}</p>
+
+        <!-- Score & Result -->
+        <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px 16px;">
+          <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">
+            📊 <b>Total Score:</b> ${totalMark}/${totalMax} (${overallPct}%)
+          </div>
+          <div style="font-size: 14px; font-weight: 700; color: ${allPassed ? '#16a34a' : '#dc2626'};">
+            🏆 <b>Result Status:</b> ${allPassed ? 'ALL SUBJECTS PASSED ✅' : 'NEEDS ATTENTION ⚠️'}
+          </div>
         </div>
       </td>
     </tr>
+
+    <!-- Faculty Remarks -->
     <tr>
-      <td style="background: #f1f5f9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;">
-        <p style="margin: 0 0 4px;"><b>Manakula Vinayagar Institute of Technology</b> • Puducherry - 605 107</p>
-        <p style="margin: 0 0 8px;">Phone: 0413-2643007, 2643008 | Email: contact@mvit.edu.in | Web: www.mvit.edu.in</p>
-        <p style="margin: 0; font-size: 11px; color: #94a3b8;">This is an official computer-generated notification sent via EduPulse Institutional Parent Communication System.</p>
+      <td style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; background: #faf5ff;">
+        <div style="font-size: 13.5px; font-weight: 700; color: #6b21a8; margin-bottom: 8px;">
+          💬 <b>FACULTY REMARKS / ஆசிரியர் கருத்து:</b>
+        </div>
+        <div style="font-size: 13px; color: #334155; margin-bottom: 6px; line-height: 1.5;">
+          • <b>English:</b> ${remarksEn}
+        </div>
+        <div style="font-size: 13px; color: #334155; line-height: 1.5;">
+          • <b>தமிழ்:</b> ${remarksTa}
+        </div>
+      </td>
+    </tr>
+
+    <!-- Verbatim Message Box -->
+    <tr>
+      <td style="padding: 16px 24px; background: #0f172a; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11.5px; line-height: 1.6; white-space: pre-wrap;">
+${plainText}
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="padding: 20px 24px; background: #f8fafc; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0 0 6px; font-weight: 600; color: #475569;">
+          📞 <b>Institution Query:</b> 0413-2643007 | <a href="mailto:info@mvit.edu.in" style="color: #4338ca; text-decoration: none;">info@mvit.edu.in</a>
+        </p>
+        <div style="border-top: 1px solid #e2e8f0; margin: 10px 0 8px;"></div>
+        <p style="margin: 0; font-style: italic; color: #94a3b8; font-size: 11px;">
+          _EduPulse Automated Institutional Parent Notification System_
+        </p>
       </td>
     </tr>
   </table>
@@ -837,6 +870,122 @@ app.post('/api/notifications/send-report/:id', wrap('Unable to send the student 
       remarks_en: report.remarks_en,
       remarks_ta: report.remarks_ta
     }
+  });
+}));
+
+// Bulk Send Progress & Attendance Report to ALL Students
+app.post('/api/notifications/send-report-all', wrap('Unable to dispatch reports to all students.', async (req, res) => {
+  const { channel = 'email', test_email, department, year, section, limit } = req.body || {};
+  const s = S();
+  const cfg = channelStatus();
+
+  let query = 'SELECT * FROM students WHERE 1=1';
+  const params = [];
+  if (department) { query += ' AND department=?'; params.push(department); }
+  if (year) { query += ' AND year=?'; params.push(year); }
+  if (section) { query += ' AND section=?'; params.push(section); }
+  query += ' ORDER BY id ASC';
+  if (limit && Number(limit) > 0) { query += ' LIMIT ?'; params.push(Number(limit)); }
+
+  const studentList = db.prepare(query).all(...params);
+  if (studentList.length === 0) return res.status(404).json({ error: 'No students found matching criteria.' });
+
+  const results = [];
+  let successCount = 0;
+  let failCount = 0;
+  let transporter = null;
+  if (channel === 'email' || channel === 'both') {
+    transporter = createMailTransporter(s);
+  }
+
+  for (const st of studentList) {
+    const report = buildStudentMarksAndAttendanceReport(st, s);
+    const targetEmail = test_email || st.parent_email;
+    const targetPhone = st.parent_phone;
+    let emailStatus = { sent: false };
+    let whatsappStatus = { sent: false };
+
+    if (channel === 'email' || channel === 'both') {
+      if (!targetEmail) {
+        emailStatus = { sent: false, error: 'Recipient parent email address is missing' };
+        failCount++;
+      } else {
+        try {
+          const info = await transporter.sendMail({
+            from: s.smtp_from || '"EduPulse MVIT" <sameer12200409@gmail.com>',
+            to: targetEmail,
+            subject: `CAT-1 Marks & Attendance Report – ${st.student_name} (${st.register_no})`,
+            text: report.plainText,
+            html: report.html
+          });
+
+          emailStatus = {
+            sent: true,
+            recipient: targetEmail,
+            messageId: info.messageId
+          };
+          successCount++;
+
+          db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,ref_key) VALUES(?,?,?,?,?,?,?,?)")
+            .run(st.id, 'Report Card', 'email', 'sent', `CAT-1 Report: ${st.student_name}`, report.plainText, targetEmail, `rep:em:${st.id}:${Date.now()}`);
+
+        } catch (err) {
+          console.error(`[bulk email error for ${st.student_name}]`, err.message);
+          emailStatus = { sent: false, recipient: targetEmail, error: err.message };
+          failCount++;
+
+          db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,error,ref_key) VALUES(?,?,?,?,?,?,?,?,?)")
+            .run(st.id, 'Report Card', 'email', 'failed', `CAT-1 Report: ${st.student_name}`, report.plainText, targetEmail, err.message, `rep:em:${st.id}:${Date.now()}`);
+        }
+      }
+    }
+
+    if (channel === 'whatsapp' || channel === 'both') {
+      const cleanPhone = (targetPhone || '').replace(/\D/g, '');
+      const phoneWithCountry = cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone;
+      const directUrl = phoneWithCountry
+        ? `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(report.plainText)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(report.plainText)}`;
+
+      whatsappStatus = {
+        sent: true,
+        recipient: targetPhone || 'Not set',
+        whatsapp_url: directUrl
+      };
+
+      if (cfg.whatsapp && targetPhone) {
+        try {
+          const to = targetPhone.startsWith('+') ? targetPhone : '+91' + cleanPhone;
+          await twilioSend(s, 'whatsapp:' + s.whatsapp_from.replace('whatsapp:', ''), 'whatsapp:' + to, report.plainText);
+          whatsappStatus.twilio_sent = true;
+        } catch (e) {
+          whatsappStatus.twilio_error = e.message;
+        }
+      }
+
+      db.prepare("INSERT INTO notifications(student_id,type,channel,status,title,message,recipient,ref_key) VALUES(?,?,?,?,?,?,?,?)")
+        .run(st.id, 'Report Card', 'whatsapp', 'sent', `CAT-1 Report: ${st.student_name}`, report.plainText, targetPhone || '', `rep:wa:${st.id}:${Date.now()}`);
+    }
+
+    results.push({
+      student_id: st.id,
+      student_name: st.student_name,
+      register_no: st.register_no,
+      email: emailStatus,
+      whatsapp: whatsappStatus
+    });
+
+    if (channel === 'email' || channel === 'both') {
+      await new Promise(r => setTimeout(r, 350));
+    }
+  }
+
+  res.json({
+    message: `Batch report dispatch completed. Sent: ${successCount}, Failed: ${failCount}`,
+    total: studentList.length,
+    sent: successCount,
+    failed: failCount,
+    results
   });
 }));
 

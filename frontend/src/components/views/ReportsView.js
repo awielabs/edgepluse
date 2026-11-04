@@ -44,6 +44,12 @@ export default function ReportsView({ meta, addToast }) {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailResult, setEmailResult] = useState(null);
 
+  // Bulk Dispatch State
+  const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkTestEmail, setBulkTestEmail] = useState('');
+  const [bulkResult, setBulkResult] = useState(null);
+
   useEffect(() => {
     fetchApi('/students')
       .then((res) => {
@@ -149,6 +155,29 @@ export default function ReportsView({ meta, addToast }) {
     addToast('WhatsApp message copied to clipboard!', 'success');
   };
 
+  const handleSendAllEmails = async () => {
+    if (!window.confirm(`Are you sure you want to dispatch CAT-1 progress report emails to ALL ${students.length} students?`)) {
+      return;
+    }
+    setBulkSending(true);
+    setBulkResult(null);
+    try {
+      const res = await fetchApi('/notifications/send-report-all', {
+        method: 'POST',
+        body: JSON.stringify({
+          channel: 'email',
+          test_email: bulkTestEmail.trim() || undefined
+        })
+      });
+      setBulkResult(res);
+      addToast(`Batch dispatch complete! Delivered: ${res.sent}, Failed: ${res.failed}`, res.failed === 0 ? 'success' : 'warning');
+    } catch (err) {
+      addToast(err.message || 'Error sending report emails to all students', 'error');
+    } finally {
+      setBulkSending(false);
+    }
+  };
+
   const headers = reportData.length > 0 ? Object.keys(reportData[0]) : [];
 
   return (
@@ -195,14 +224,22 @@ export default function ReportsView({ meta, addToast }) {
             </div>
           </div>
 
-          {/* Student Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '500' }}>Student:</span>
+          {/* Student Selector & Bulk Dispatch Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <button
+              onClick={() => setShowBulkPanel(!showBulkPanel)}
+              className={showBulkPanel ? 'btn-primary' : 'btn-secondary'}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+            >
+              <Mail size={15} /> {showBulkPanel ? 'Hide Bulk Dispatch' : `⚡ Send to All Students (${students.length})`}
+            </button>
+
+            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '500', marginLeft: '6px' }}>Student:</span>
             <select
               className="glass-select"
               value={dispatchStudentId}
               onChange={(e) => setDispatchStudentId(e.target.value)}
-              style={{ minWidth: '240px', fontWeight: '600' }}
+              style={{ minWidth: '220px', fontWeight: '600' }}
             >
               {students.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -212,6 +249,93 @@ export default function ReportsView({ meta, addToast }) {
             </select>
           </div>
         </div>
+
+        {/* ================= BULK DISPATCH PANEL ================= */}
+        {showBulkPanel && (
+          <div
+            style={{
+              background: 'rgba(99, 102, 241, 0.08)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              borderRadius: '14px',
+              padding: '18px 20px',
+              marginBottom: '20px'
+            }}
+          >
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '15px', color: '#f8fafc', fontWeight: '700' }}>
+                  🚀 Batch Report Email Dispatch to All {students.length} Students
+                </h4>
+                <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#c7d2fe' }}>
+                  Delivers personalized CAT-1 attendance &amp; marks reports formatted with the institutional template to all student parents via Google Gmail SMTP.
+                </p>
+              </div>
+
+              <span
+                style={{
+                  background: 'rgba(34, 197, 94, 0.15)',
+                  color: '#4ade80',
+                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                }}
+              >
+                {students.length} Students Queued
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+              <div style={{ flex: '1 1 280px' }}>
+                <input
+                  type="email"
+                  className="glass-input"
+                  value={bulkTestEmail}
+                  onChange={(e) => setBulkTestEmail(e.target.value)}
+                  placeholder="Optional Test Email (leave blank to send to real parent emails)"
+                  style={{ width: '100%', fontSize: '13px' }}
+                />
+              </div>
+
+              <button
+                onClick={handleSendAllEmails}
+                disabled={bulkSending}
+                className="btn-primary"
+                style={{
+                  padding: '10px 18px',
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <Send size={15} />
+                {bulkSending ? 'Dispatching to All Students...' : `Send Official Email to All ${students.length} Students`}
+              </button>
+            </div>
+
+            {bulkResult && (
+              <div
+                style={{
+                  marginTop: '14px',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  background: bulkResult.failed === 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                  border: `1px solid ${bulkResult.failed === 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)'}`
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: bulkResult.failed === 0 ? '#4ade80' : '#fde047' }}>
+                  {bulkResult.message}
+                </div>
+                <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
+                  Total: {bulkResult.total} | Successfully Sent: <b>{bulkResult.sent}</b> | Failed: <b>{bulkResult.failed}</b>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {loadingCard ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
